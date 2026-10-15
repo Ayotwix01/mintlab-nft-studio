@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 
-
 export async function POST(request: Request) {
   try {
     const jwt = process.env.PINATA_JWT;
 
     if (!jwt) {
+      console.error("PINATA_JWT is missing");
+
       return NextResponse.json(
         { error: "Upload service is not configured." },
         { status: 500 },
@@ -80,7 +81,12 @@ export async function POST(request: Request) {
     );
 
     if (!response.ok) {
-      console.error("Pinata metadata upload failed:", response.status);
+      const details = await response.text();
+
+      console.error("Pinata metadata upload failed:", {
+        status: response.status,
+        details,
+      });
 
       return NextResponse.json(
         { error: "Pinata could not upload the NFT metadata." },

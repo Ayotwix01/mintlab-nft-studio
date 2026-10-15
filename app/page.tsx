@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 import { useWallet } from "@/src/hooks/useWallet";
 import EnsLookup from "@/src/components/EnsLookup";
-import PinataUploader from "@/src/components/PinataUploader";
 import MintArtwork from "@/src/components/MintArtwork";
 import { getMintedNFTs } from "@/src/lib/nftGallery";
 
@@ -544,8 +543,26 @@ export default function Home() {
           </section>
 
           <EnsLookup />
+
           <div id="create" className="my-10 scroll-mt-24">
-            <PinataUploader />
+            <div className="mb-5">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#85867d]">
+                YOUR CREATIVE SPACE
+              </p>
+
+              <h2 className="font-serif text-3xl tracking-tight">
+                Create and mint your artwork
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-[#77786f]">
+                Connect your wallet, upload your artwork to IPFS, save its
+                metadata, and mint your NFT on the Sepolia testnet.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-[#e5e3db] bg-white p-5 sm:p-7">
+              <MintArtwork />
+            </div>
           </div>
 
           {/* Gallery heading */}
