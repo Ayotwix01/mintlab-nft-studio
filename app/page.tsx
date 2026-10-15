@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import {
   ArrowDown,
   ArrowDownRight,
@@ -25,8 +25,9 @@ import { useWallet } from "@/src/hooks/useWallet";
 import EnsLookup from "@/src/components/EnsLookup";
 import PinataUploader from "@/src/components/PinataUploader";
 import MintArtwork from "@/src/components/MintArtwork";
+import { getMintedNFTs } from "@/src/lib/nftGallery";
 
-const artworks = [
+const demoArtworks = [
   {
     id: 1,
     title: "Soft Geometry",
@@ -140,6 +141,7 @@ export default function Home() {
     walletError,
   } = useWallet();
 
+  const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All work");
   const [saved, setSaved] = useState<number[]>([]);
@@ -148,9 +150,42 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [toast, setToast] = useState("");
+  const [allArtworks, setAllArtworks] = useState(demoArtworks);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  useEffect(() => {
+    let active = true;
+
+    getMintedNFTs()
+      .then((minted) => {
+        if (!active || minted.length === 0) return;
+
+        const onChainArtworks = minted.map((nft, index) => ({
+          id: 1000 + index,
+          title: nft.title,
+          artist: nft.artist,
+          initials: nft.title.slice(0, 2).toUpperCase(),
+          category: "On-chain",
+          price: `Token #${nft.tokenId}`,
+          image: nft.image,
+          ratio: "aspect-[4/5]",
+        }));
+
+        setAllArtworks([...onChainArtworks, ...demoArtworks]);
+      })
+      .catch((error) => {
+        console.error("Could not load minted NFTs:", error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filteredArtworks = useMemo(() => {
-    return artworks.filter((artwork) => {
+    return allArtworks.filter((artwork) => {
       const matchesSearch =
         `${artwork.title} ${artwork.artist} ${artwork.category}`
           .toLowerCase()
@@ -163,7 +198,7 @@ export default function Home() {
 
       return matchesSearch && matchesCategory && matchesSaved;
     });
-  }, [search, category, saved, savedOnly]);
+  }, [allArtworks, search, category, saved, savedOnly]);
 
   function notify(message: string) {
     setToast(message);
@@ -235,7 +270,6 @@ export default function Home() {
             MINT<span className="text-[#78953f]">LAB</span>
             <span className="text-[#a2c65a]">.</span>
           </a>
-
           <div className="relative hidden max-w-[480px] flex-1 md:block">
             <Search
               size={17}
@@ -249,7 +283,6 @@ export default function Home() {
               className="h-11 w-full rounded-full border border-[#e5e3db] bg-[#eeede7] pl-11 pr-4 text-sm outline-none transition focus:border-[#9bb76a] focus:ring-2 focus:ring-[#c7f36b]/40"
             />
           </div>
-
           <nav className="ml-auto hidden items-center gap-7 text-sm font-medium text-[#77786f] lg:flex">
             <a href="#discover" className="text-[#20211c]">
               Discover
@@ -261,7 +294,6 @@ export default function Home() {
               Creators
             </a>
           </nav>
-
           <button
             type="button"
             onClick={() => setMobileMenuOpen((open) => !open)}
@@ -270,30 +302,9 @@ export default function Home() {
           >
             {mobileMenuOpen ? <X size={19} /> : <Menu size={19} />}
           </button>
-
-          {isConnected ? (
+          {mounted && isConnected ? (
             <div className="relative flex shrink-0 items-center gap-2">
-              <span
-                className={`hidden items-center gap-1.5 rounded-full px-2.5 py-2 text-[10px] font-bold sm:flex ${
-                  isSepolia
-                    ? "bg-[#e8efd9] text-[#4f692b]"
-                    : "bg-amber-100 text-amber-800"
-                }`}
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                {isSepolia ? "SEPOLIA" : `CHAIN ${chainId ?? "?"}`}
-              </span>
-
-              <button
-                type="button"
-                onClick={disconnectWallet}
-                title="Disconnect wallet"
-                className="flex items-center gap-2 rounded-full bg-[#20211c] px-3.5 py-3 text-xs font-semibold text-white transition hover:bg-[#3b3d34] sm:px-4"
-              >
-                <Wallet size={15} />
-                {shortAddress}
-                <LogOut size={13} className="hidden sm:block" />
-              </button>
+              {/* Keep your existing connected-wallet content here */}
             </div>
           ) : (
             <button
@@ -304,7 +315,7 @@ export default function Home() {
             >
               {isConnecting ? "Connecting..." : "Connect wallet ↗"}
             </button>
-          )}
+          )}{" "}
         </div>
 
         {mobileMenuOpen && (
@@ -410,7 +421,7 @@ export default function Home() {
             <p className="mt-2 text-xs leading-5 text-[#85867d]">
               Connect your wallet to prepare your first NFT.
             </p>
-            {!isConnected && (
+            {mounted && !isConnected && (
               <button
                 type="button"
                 onClick={connectWallet}
@@ -420,7 +431,7 @@ export default function Home() {
                 {isConnecting ? "Connecting..." : "Connect wallet ↗"}
               </button>
             )}
-            {isConnected && !isSepolia && (
+            {mounted && isConnected && !isSepolia && (
               <button
                 type="button"
                 onClick={switchToSepolia}
@@ -430,7 +441,7 @@ export default function Home() {
                 {isSwitching ? "Switching..." : "Switch to Sepolia"}
               </button>
             )}
-            {isConnected && isSepolia && (
+            {mounted && isConnected && isSepolia && (
               <p className="mt-4 flex items-center gap-2 text-xs font-semibold text-[#587535]">
                 <Check size={14} /> Wallet ready
               </p>
@@ -761,7 +772,8 @@ export default function Home() {
 
             <MintArtwork />
             <p className="mt-4 text-center text-[11px] leading-5 text-[#85867d]">
-              Images and metadata are stored on IPFS; minting requires a Sepolia wallet transaction.
+              Images and metadata are stored on IPFS; minting requires a Sepolia
+              wallet transaction.
             </p>
           </div>
         </div>

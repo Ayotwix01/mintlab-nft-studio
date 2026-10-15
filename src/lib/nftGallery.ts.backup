@@ -1,0 +1,81 @@
+import {
+  createPublicClient,
+  decodeEventLog,
+  http,
+  parseAbi,
+} from "viem";
+import { sepolia } from "viem/chains";
+
+const CONTRACT = "0x944fA4a2D247ede82cd39FD75Ef9CadE014c6a7a";
+
+const abi = parseAbi([
+  "event ArtworkMinted(address indexed creator, uint256 indexed tokenId, string metadataURI)",
+]);
+
+const client = createPublicClient({
+  chain: sepolia,
+  transport: http("https://ethereum-sepolia-rpc.publicnode.com"),
+});
+
+export type GalleryNFT = {
+  id: string;
+  title: string;
+  artist: string;
+  category: string;
+  image: string;
+  metadataURI: string;
+  tokenId: string;
+};
+
+function ipfsUrl(uri: string): string {
+  if (uri.startsWith("ipfs://")) {
+    return `https://gateway.pinata.cloud/ipfs/${uri.slice(7).replace(/^ipfs\//, "")}`;
+  }
+
+  return uri;
+}
+
+export async function getMintedNFTs(): Promise<GalleryNFT[]> {
+  const logs = await client.getLogs({
+    address: CONTRACT,
+    event: abi[0],
+    fromBlock: BigInt(0),
+    toBlock: "latest",
+  });
+
+  const nfts = await Promise.all(
+    logs.map(async (log) => {
+      const decoded = decodeEventLog({
+        abi,
+        data: log.data,
+        topics: log.topics,
+        eventName: "ArtworkMinted",
+      });
+
+      const metadataURI = decoded.args.metadataURI;
+      const creator = decoded.args.creator;
+
+      const response = await fetch(ipfsUrl(metadataURI), {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Could not load NFT metadata for token ${decoded.args.tokenId}`);
+      }
+
+      const metadata = await response.json();
+
+      return {
+        id: `${CONTRACT}-${decoded.args.tokenId}`,
+        tokenId: decoded.args.tokenId.toString(),
+        title: metadata.name || `NFT #${decoded.args.tokenId}`,
+        artist: `${creator.slice(0, 6)}…${creator.slice(-4)}`,
+        category: "On-chain",
+        image: ipfsUrl(metadata.image || ""),
+        metadataURI,
+      };
+    }),
+  );
+
+  return nfts.reverse();
+}
