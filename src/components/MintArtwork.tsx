@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { useWallet } from "@/src/hooks/useWallet";
 
@@ -34,6 +34,11 @@ async function readResponse(response: Response): Promise<ApiError> {
 }
 
 export default function MintArtwork() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const {
     isConnected,
     isSepolia,
@@ -171,6 +176,10 @@ export default function MintArtwork() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (!mounted) {
+    return <div className="mt-5" aria-live="polite">Loading mint studio...</div>;
   }
 
   return (

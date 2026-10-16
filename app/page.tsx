@@ -12,18 +12,39 @@ import {
   Layers3,
   LogOut,
   Menu,
+  Moon,
   Network,
   Search,
   Sparkles,
+  Sun,
   Wallet,
   X,
 } from "lucide-react";
 import { useWallet } from "@/src/hooks/useWallet";
 import EnsLookup from "@/src/components/EnsLookup";
 import MintArtwork from "@/src/components/MintArtwork";
+import GaslessBatchMint from "@/src/components/GaslessBatchMint";
 import { getMintedNFTs } from "@/src/lib/nftGallery";
+import LiveMintAlerts from "@/src/components/LiveMintAlerts";
+import CreatorIdentity from "@/src/components/CreatorIdentity";
 
-const demoArtworks = [
+type Artwork = {
+  id: number;
+  title: string;
+  artist: string;
+  initials: string;
+  category: string;
+  price: string;
+  image: string;
+  ratio: string;
+  isOnChain?: boolean;
+  tokenId?: string;
+  creator?: `0x${string}`;
+  metadataURI?: string;
+  transactionHash?: `0x${string}`;
+  network?: string;
+};
+const demoArtworks: Artwork[] = [
   {
     id: 1,
     title: "Soft Geometry",
@@ -148,7 +169,14 @@ export default function Home() {
   const [createOpen, setCreateOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toast, setToast] = useState("");
-  const [allArtworks, setAllArtworks] = useState(demoArtworks);
+  const [darkMode, setDarkMode] = useState(false);
+  const [allArtworks, setAllArtworks] = useState<Artwork[]>(demoArtworks);
+
+  const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark-theme", darkMode);
+  }, [darkMode]);
 
   const mounted = useSyncExternalStore(
     subscribeToNothing,
@@ -163,7 +191,7 @@ export default function Home() {
       .then((minted) => {
         if (!active || minted.length === 0) return;
 
-        const onChainArtworks = minted.map((nft, index) => ({
+        const onChainArtworks: Artwork[] = minted.map((nft, index) => ({
           id: 1000 + index,
           title: nft.title,
           artist: nft.artist,
@@ -172,6 +200,12 @@ export default function Home() {
           price: `Token #${nft.tokenId}`,
           image: nft.image,
           ratio: "aspect-[4/5]",
+          isOnChain: true,
+          tokenId: nft.tokenId,
+          creator: nft.creator,
+          metadataURI: nft.metadataURI,
+          transactionHash: nft.transactionHash,
+          network: nft.network,
         }));
 
         setAllArtworks([...onChainArtworks, ...demoArtworks]);
@@ -257,14 +291,16 @@ export default function Home() {
 
           <button
             type="button"
-            onClick={() => setMobileMenuOpen((open) => !open)}
-            aria-label="Toggle navigation"
-            aria-expanded={mobileMenuOpen}
-            className="ml-auto rounded-full border border-[#e3e1d8] p-2.5 lg:hidden"
+            onClick={() => setDarkMode((current) => !current)}
+            aria-label={
+              darkMode ? "Switch to light mode" : "Switch to dark mode"
+            }
+            aria-pressed={darkMode}
+            title={darkMode ? "Light mode" : "Dark mode"}
+            className="shrink-0 rounded-full border border-[#e3e1d8] p-2.5 transition hover:bg-white"
           >
-            {mobileMenuOpen ? <X size={19} /> : <Menu size={19} />}
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-
           {mounted && isConnected ? (
             <div className="flex shrink-0 items-center gap-2">
               <div className="hidden text-right sm:block">
@@ -349,7 +385,7 @@ export default function Home() {
       {/* Main layout */}
       <div className="mx-auto grid max-w-[1600px] grid-cols-1 lg:grid-cols-[205px_minmax(0,1fr)]">
         {/* Sidebar */}
-        <aside className="hidden min-h-[calc(100vh-72px)] border-r border-[#e6e4dc] px-5 py-8 lg:block">
+        <aside className="hidden min-w-0 self-start overflow-x-hidden overflow-y-auto overscroll-contain border-r border-[#e6e4dc] px-5 py-8 lg:sticky lg:top-[72px] lg:block lg:h-[calc(100vh-72px)]">
           <p className="mb-4 px-3 text-[10px] font-bold uppercase tracking-[2px] text-[#96968d]">
             Explore
           </p>
@@ -569,6 +605,7 @@ export default function Home() {
 
             <div className="rounded-2xl border border-[#e5e3db] bg-white p-5 sm:p-7">
               <MintArtwork />
+              <GaslessBatchMint />
             </div>
           </section>
 
@@ -634,16 +671,26 @@ export default function Home() {
                     className="mb-5 inline-block w-full break-inside-avoid"
                   >
                     <div className="group relative overflow-hidden bg-[#e9e7df]">
-                      <img
-                        src={artwork.image}
-                        alt={artwork.title}
-                        loading="lazy"
-                        className={`${artwork.ratio} block w-full object-cover transition duration-500 group-hover:scale-[1.025]`}
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setSelectedArtwork(artwork)}
+                        aria-label={`View ${artwork.title} details`}
+                        className="block w-full text-left"
+                      >
+                        <img
+                          src={artwork.image}
+                          alt={artwork.title}
+                          loading="lazy"
+                          className={`${artwork.ratio} block w-full cursor-pointer object-cover transition duration-500 group-hover:scale-[1.025]`}
+                        />
+                      </button>
 
                       <button
                         type="button"
-                        onClick={() => toggleSaved(artwork.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleSaved(artwork.id);
+                        }}
                         aria-label={
                           saved.includes(artwork.id)
                             ? "Remove saved artwork"
@@ -667,16 +714,22 @@ export default function Home() {
 
                       <div className="absolute bottom-3 left-3">
                         <span className="bg-[#f7f6f2]/95 px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wide text-[#55564e]">
-                          {artwork.category}
+                          {artwork.isOnChain
+                            ? `Sepolia · Token #${artwork.tokenId}`
+                            : "Gallery preview"}
                         </span>
                       </div>
                     </div>
 
                     <div className="pt-3">
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className="text-[13px] font-bold tracking-[-0.2px]">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedArtwork(artwork)}
+                          className="text-left text-[13px] font-bold tracking-[-0.2px] hover:underline"
+                        >
                           {artwork.title}
-                        </h3>
+                        </button>
 
                         <span className="shrink-0 text-[10px] font-semibold text-[#77786f]">
                           {artwork.price}
@@ -688,7 +741,11 @@ export default function Home() {
                           {artwork.initials}
                         </span>
 
-                        <span>{artwork.artist}</span>
+                        {artwork.isOnChain && artwork.creator ? (
+                          <CreatorIdentity address={artwork.creator} compact />
+                        ) : (
+                          <span>{artwork.artist}</span>
+                        )}
 
                         <ArrowUpRight
                           size={12}
@@ -764,6 +821,169 @@ export default function Home() {
           </footer>
         </main>
       </div>
+
+      <LiveMintAlerts />
+
+      {/* Artwork detail modal */}
+      {selectedArtwork && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#151610]/70 p-4 backdrop-blur-sm"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setSelectedArtwork(null);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="artwork-detail-title"
+            className="my-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-[#e5e3db] bg-[#f7f6f2] shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-[#e5e3db] px-5 py-4">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#77786f]">
+                Artwork details
+              </p>
+              <button
+                type="button"
+                onClick={() => setSelectedArtwork(null)}
+                aria-label="Close artwork details"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-[#e0ded6] text-[#42443a] transition hover:bg-[#e9e7df]"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid gap-6 p-5 sm:grid-cols-2 sm:p-7">
+              <div className="overflow-hidden rounded-xl bg-[#e9e7df]">
+                <img
+                  src={selectedArtwork.image}
+                  alt={selectedArtwork.title}
+                  className="max-h-[65vh] min-h-64 w-full object-contain sm:max-h-[520px]"
+                />
+              </div>
+
+              <div className="flex flex-col items-start py-1">
+                <span className="rounded-full bg-[#e9efd9] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-[#405329]">
+                  {selectedArtwork.category}
+                </span>
+
+                <h2
+                  id="artwork-detail-title"
+                  className="mt-5 text-3xl font-bold tracking-tight text-[#20211c]"
+                >
+                  {selectedArtwork.title}
+                </h2>
+
+                <div className="mt-4 flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full border border-[#e0ded6] bg-white text-xs font-bold text-[#42443a]">
+                    {selectedArtwork.initials}
+                  </span>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[#85867d]">
+                      Created by
+                    </p>
+
+                    <div className="mt-1 text-sm font-bold text-[#20211c]">
+                      {selectedArtwork.isOnChain && selectedArtwork.creator ? (
+                        <CreatorIdentity address={selectedArtwork.creator} />
+                      ) : (
+                        <span>{selectedArtwork.artist} · Gallery preview</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-7 w-full border-t border-[#e5e3db] pt-5">
+                  {selectedArtwork.isOnChain ? (
+                    <div className="space-y-4 text-sm">
+                      <div>
+                        <p className="text-xs text-[#77786f]">Network</p>
+                        <p className="mt-1 font-semibold">
+                          {selectedArtwork.network || "Sepolia testnet"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-[#77786f]">Token ID</p>
+                        <p className="mt-1 font-semibold">
+                          #{selectedArtwork.tokenId}
+                        </p>
+                      </div>
+
+                      {selectedArtwork.creator && (
+                        <div>
+                          <p className="text-xs text-[#77786f]">
+                            Creator address
+                          </p>
+                          <a
+                            href={`https://sepolia.etherscan.io/address/${selectedArtwork.creator}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 block break-all font-mono text-xs underline underline-offset-4"
+                          >
+                            {selectedArtwork.creator}
+                          </a>
+                        </div>
+                      )}
+
+                      {selectedArtwork.transactionHash && (
+                        <a
+                          href={`https://sepolia.etherscan.io/tx/${selectedArtwork.transactionHash}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 font-semibold underline underline-offset-4"
+                        >
+                          View mint transaction <ArrowUpRight size={14} />
+                        </a>
+                      )}
+
+                      {selectedArtwork.metadataURI && (
+                        <div>
+                          <p className="text-xs text-[#77786f]">
+                            IPFS metadata
+                          </p>
+                          <a
+                            href={
+                              selectedArtwork.metadataURI.startsWith("ipfs://")
+                                ? `https://gateway.pinata.cloud/ipfs/${selectedArtwork.metadataURI.slice(7).replace(/^ipfs\//, "")}`
+                                : selectedArtwork.metadataURI
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 block break-all text-xs underline underline-offset-4"
+                          >
+                            View NFT metadata
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-xs text-[#77786f]">Artwork status</p>
+                      <p className="mt-1 text-sm font-semibold">
+                        Illustrative gallery preview
+                      </p>
+                      <p className="mt-2 text-xs leading-5 text-[#77786f]">
+                        This artwork is included as a visual example. It is not
+                        represented as an NFT minted by this application.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedArtwork(null)}
+                  className="mt-7 w-full rounded-full bg-[#c7f36b] px-5 py-3 text-sm font-bold text-[#202719] transition hover:bg-[#b8e65b]"
+                >
+                  Back to gallery
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create artwork modal */}
       {createOpen && (

@@ -1728,3 +1728,146 @@ h3,
   font-family: var(--font-display), Georgia, serif;
   font-weight: 400;
 }
+
+/* MINTLAB page theme overrides */
+.theme-dark {
+  background-color: #171916 !important;
+  color: #f1f0e9 !important;
+  color-scheme: dark;
+}
+
+.theme-dark header,
+.theme-dark aside,
+.theme-dark main > section,
+.theme-dark .bg-white {
+  border-color: #353a30;
+}
+
+.theme-dark header {
+  background-color: rgb(23 25 22 / 95%);
+}
+
+.theme-dark input,
+.theme-dark textarea,
+.theme-dark select {
+  background-color: #1e211b;
+  color: #f1f0e9;
+  border-color: #353a30;
+}
+
+.theme-dark input::placeholder,
+.theme-dark textarea::placeholder {
+  color: #999d90;
+}
+
+.theme-dark .text-\[\#20211c\] {
+  color: #f1f0e9;
+}
+
+.theme-dark .text-\[\#77786f\],
+.theme-dark .text-\[\#85867d\],
+.theme-dark .text-\[\#96968d\] {
+  color: #999d90;
+}
+
+.theme-dark .border-\[\#e6e4dc\],
+.theme-dark .border-\[\#e5e3db\],
+.theme-dark .border-\[\#e1dfd7\],
+.theme-dark .border-\[\#e0ded6\] {
+  border-color: #353a30;
+}
+
+.theme-dark .bg-\[\#f7f6f2\],
+.theme-dark .bg-\[\#f7f6f2\]\/95 {
+  background-color: #171916;
+}
+
+.theme-dark .bg-\[\#eeede7\],
+.theme-dark .bg-\[\#e9e7df\] {
+  background-color: #252920;
+}
+
+.theme-dark .bg-white {
+  background-color: #1e211b;
+  color: #f1f0e9;
+}
+
+.theme-dark .hover\:bg-white:hover,
+.theme-dark .hover\:bg-\[\#eeede7\]:hover {
+  background-color: #252920;
+}
+
+.theme-dark .text-\[\#55564e\],
+.theme-dark .text-\[\#42443a\] {
+  color: #f1f0e9;
+}
+
+.theme-dark .bg-\[\#e9efd9\] {
+  background-color: #303a25;
+}
+
+.theme-dark .text-\[\#405329\] {
+  color: #d7ff64;
+}
+
+.theme-dark .border-dashed {
+  border-color: #474d40;
+}
+
+/* MINTLAB dark theme */
+html.dark-theme body {
+  background: #151610;
+  color: #f1f0e9;
+}
+
+html.dark-theme [class*="bg-[#f7f6f2]"] {
+  background-color: #151610 !important;
+}
+
+html.dark-theme [class*="bg-[#eeede7]"],
+html.dark-theme [class*="bg-[#e9e7df]"] {
+  background-color: #252620 !important;
+}
+
+html.dark-theme [class*="bg-white"] {
+  background-color: #1d1e19 !important;
+}
+
+html.dark-theme [class*="text-[#20211c]"] {
+  color: #f1f0e9 !important;
+}
+
+html.dark-theme [class*="text-[#77786f]"],
+html.dark-theme [class*="text-[#85867d]"],
+html.dark-theme [class*="text-[#96968d]"] {
+  color: #b0b1a5 !important;
+}
+
+html.dark-theme [class*="border-[#e6e4dc]"],
+html.dark-theme [class*="border-[#e5e3db]"],
+html.dark-theme [class*="border-[#deddd5]"],
+html.dark-theme [class*="border-[#e3e1d9]"],
+html.dark-theme [class*="border-[#e1dfd7]"],
+html.dark-theme [class*="border-[#e0ded6]"] {
+  border-color: #35362e !important;
+}
+
+html.dark-theme input {
+  color: #f1f0e9;
+}
+
+html.dark-theme input::placeholder {
+  color: #a3a498;
+}
+
+html.dark-theme header {
+  background-color: rgb(21 22 16 / 95%);
+}
+
+html.dark-theme button:hover {
+  border-color: #555747;
+}
+
+html.dark-theme img {
+  color-scheme: light;
+}

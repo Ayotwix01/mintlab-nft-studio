@@ -26,6 +26,9 @@ export type GalleryNFT = {
   image: string;
   metadataURI: string;
   tokenId: string;
+  creator: `0x${string}`;
+  transactionHash: `0x${string}`;
+  network: "Sepolia";
 };
 
 function ipfsUrl(uri: string): string {
@@ -90,6 +93,9 @@ async function readNFTsFromLogs(logs: Log[]): Promise<GalleryNFT[]> {
       category: "On-chain",
       image,
       metadataURI,
+      creator,
+      transactionHash: event.transactionHash,
+      network: "Sepolia",
     });
   }
 
