@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { useWallet } from "@/src/hooks/useWallet";
 
-const CONTRACT_ADDRESS = "0x944fA4a2D247ede82cd39FD75Ef9CadE014c6a7a" as const;
+const CONTRACT_ADDRESS = "0x5dDc98cAdd973246F4E20a0E895E7D6fe723Aa09" as const;
 
 const CONTRACT_ABI = [
   {
@@ -179,7 +179,11 @@ export default function MintArtwork() {
   }
 
   if (!mounted) {
-    return <div className="mt-5" aria-live="polite">Loading mint studio...</div>;
+    return (
+      <div className="mt-5" aria-live="polite">
+        Loading mint studio...
+      </div>
+    );
   }
 
   return (

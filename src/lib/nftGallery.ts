@@ -2,15 +2,13 @@ import { createPublicClient, http, parseAbi, parseEventLogs } from "viem";
 import { sepolia } from "viem/chains";
 import type { Log } from "viem";
 
-const CONTRACT = "0x944fA4a2D247ede82cd39FD75Ef9CadE014c6a7a" as const;
-
-const FIRST_MINT_TX =
-  "0x35bdd355acc1888d1aeb4e0d937a2e4fc4573454cfa675198d30717ec88f1dfc" as const;
-
-const KNOWN_IMAGE = "ipfs://QmfKHMAfUchr2htHxzbHiN9TGP289VEc6BgYKNw9rffg8s";
+const CONTRACT = "0x5dDc98cAdd973246F4E20a0E895E7D6fe723Aa09" as const;
 
 const abi = parseAbi([
-  "event ArtworkMinted(address indexed creator, uint256 indexed tokenId, string metadataURI)",
+  "function totalMinted() view returns (uint256)",
+  "function tokenURI(uint256 tokenId) view returns (string)",
+  "function ownerOf(uint256 tokenId) view returns (address)",
+  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
 ]);
 
 const client = createPublicClient({
@@ -43,111 +41,117 @@ function ipfsUrl(uri: string): string {
   return uri;
 }
 
-async function readNFTsFromLogs(logs: Log[]): Promise<GalleryNFT[]> {
-  const decoded = parseEventLogs({
-    abi,
-    eventName: "ArtworkMinted",
-    logs,
-    strict: false,
-  });
+async function readMetadata(metadataURI: string, tokenId: bigint) {
+  let title = `NFT #${tokenId}`;
+  let image = "";
 
-  const nfts: GalleryNFT[] = [];
-
-  for (const event of decoded) {
-    if (event.address.toLowerCase() !== CONTRACT.toLowerCase()) continue;
-
-    const { creator, tokenId, metadataURI } = event.args;
-
-    if (!creator || tokenId === undefined || !metadataURI) {
-      continue;
-    }
-
-    let title = `NFT #${tokenId}`;
-    let image = "";
-
-    try {
-      const response = await fetch(ipfsUrl(metadataURI), {
-        cache: "no-store",
-      });
-
-      if (response.ok) {
-        const metadata = await response.json();
-        title = metadata.name || title;
-        image = ipfsUrl(metadata.image || "");
-      }
-    } catch (error) {
-      console.warn("Could not load NFT metadata:", tokenId.toString(), error);
-    }
-
-    // Keep Ayotwix visible even if its metadata gateway is temporarily down.
-    if (tokenId === BigInt("1") && !image) {
-      title = "Ayotwix";
-      image = ipfsUrl(KNOWN_IMAGE);
-    }
-
-    nfts.push({
-      id: `${CONTRACT.toLowerCase()}-${tokenId.toString()}`,
-      tokenId: tokenId.toString(),
-      title,
-      artist: `${creator.slice(0, 6)}…${creator.slice(-4)}`,
-      category: "On-chain",
-      image,
-      metadataURI,
-      creator,
-      transactionHash: event.transactionHash,
-      network: "Sepolia",
+  try {
+    const response = await fetch(ipfsUrl(metadataURI), {
+      cache: "no-store",
     });
+
+    if (response.ok) {
+      const metadata = await response.json();
+      title = metadata.name || title;
+      image = ipfsUrl(metadata.image || "");
+    }
+  } catch (error) {
+    console.warn("Could not load NFT metadata:", tokenId.toString(), error);
   }
 
-  return nfts;
+  return { title, image };
 }
 
 export async function getMintedNFTs(): Promise<GalleryNFT[]> {
-  // First retrieve the confirmed mint directly. This does not require
-  // the RPC provider to search its entire historical log database.
-  const receipt = await client.getTransactionReceipt({
-    hash: FIRST_MINT_TX,
+  const totalMinted = await client.readContract({
+    address: CONTRACT,
+    abi,
+    functionName: "totalMinted",
   });
 
+  if (totalMinted === BigInt(0)) return [];
+
+  const latestBlock = await client.getBlockNumber();
   const nftMap = new Map<string, GalleryNFT>();
 
-  const firstNFTs = await readNFTsFromLogs(receipt.logs);
-  for (const nft of firstNFTs) {
-    nftMap.set(nft.id, nft);
-  }
+  // Transfer events with the zero address as sender identify mints.
+  // Search in chunks to avoid oversized RPC requests.
+  const chunkSize = BigInt(2000);
+  let fromBlock = BigInt(11927726);
 
-  // Try to discover additional mints from this known mint's block onward.
-  // If historical log access fails, retain the NFTs already loaded above.
-  try {
-    const latestBlock = await client.getBlockNumber();
-    const chunkSize = BigInt("10000");
-    let fromBlock = receipt.blockNumber;
+  while (fromBlock <= latestBlock) {
+    const toBlock =
+      fromBlock + chunkSize - BigInt(1) > latestBlock
+        ? latestBlock
+        : fromBlock + chunkSize - BigInt(1);
 
-    while (fromBlock <= latestBlock) {
-      const toBlock =
-        fromBlock + chunkSize - BigInt("1") > latestBlock
-          ? latestBlock
-          : fromBlock + chunkSize - BigInt("1");
+    const logs = await client.getLogs({
+      address: CONTRACT,
+      event: parseAbi([
+        "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
+      ])[0],
+      args: { from: "0x0000000000000000000000000000000000000000" },
+      fromBlock,
+      toBlock,
+    });
 
-      const logs = await client.getLogs({
-        address: CONTRACT,
-        fromBlock,
-        toBlock,
-      });
+    const decoded = parseEventLogs({
+      abi,
+      eventName: "Transfer",
+      logs: logs as Log[],
+      strict: false,
+    });
 
-      const moreNFTs = await readNFTsFromLogs(logs);
-
-      for (const nft of moreNFTs) {
-        nftMap.set(nft.id, nft);
+    for (const event of decoded) {
+      const { from, to, tokenId } = event.args;
+      if (
+        !from ||
+        from.toLowerCase() !== "0x0000000000000000000000000000000000000000" ||
+        !to ||
+        tokenId === undefined
+      ) {
+        continue;
       }
 
-      fromBlock = toBlock + BigInt("1");
+      try {
+        const metadataURI = await client.readContract({
+          address: CONTRACT,
+          abi,
+          functionName: "tokenURI",
+          args: [tokenId],
+        });
+
+        const [metadata, owner] = await Promise.all([
+          readMetadata(metadataURI, tokenId),
+          client.readContract({
+            address: CONTRACT,
+            abi,
+            functionName: "ownerOf",
+            args: [tokenId],
+          }),
+        ]);
+
+        nftMap.set(tokenId.toString(), {
+          id: `${CONTRACT.toLowerCase()}-${tokenId.toString()}`,
+          tokenId: tokenId.toString(),
+          title: metadata.title,
+          artist: `${to.slice(0, 6)}…${to.slice(-4)}`,
+          category: "On-chain",
+          image: metadata.image,
+          metadataURI,
+          creator: to,
+          transactionHash: event.transactionHash,
+          network: "Sepolia",
+        });
+
+        // ownerOf is deliberately checked to ensure the token exists.
+        void owner;
+      } catch (error) {
+        console.warn("Could not load Diamond NFT:", tokenId.toString(), error);
+      }
     }
-  } catch (error) {
-    console.warn(
-      "Additional NFT history could not be loaded; keeping confirmed mints.",
-      error,
-    );
+
+    fromBlock = toBlock + BigInt(1);
   }
 
   return Array.from(nftMap.values()).sort((a, b) =>

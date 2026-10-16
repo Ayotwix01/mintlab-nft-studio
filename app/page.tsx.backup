@@ -1,32 +1,30 @@
 "use client";
 
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   ArrowDown,
   ArrowDownRight,
-  ArrowRight,
   ArrowUpRight,
   Bookmark,
   Check,
-  ChevronDown,
   Compass,
   ImagePlus,
   Layers3,
+  LogOut,
   Menu,
+  Network,
   Search,
   Sparkles,
   Wallet,
   X,
-  LogOut,
-  Network,
-  UploadCloud,
 } from "lucide-react";
 import { useWallet } from "@/src/hooks/useWallet";
 import EnsLookup from "@/src/components/EnsLookup";
-import PinataUploader from "@/src/components/PinataUploader";
 import MintArtwork from "@/src/components/MintArtwork";
+import { getMintedNFTs } from "@/src/lib/nftGallery";
+import LiveMintAlerts from "@/src/components/LiveMintAlerts";
 
-const artworks = [
+const demoArtworks = [
   {
     id: 1,
     title: "Soft Geometry",
@@ -126,6 +124,10 @@ const categories = [
   "On-chain",
 ];
 
+const subscribeToNothing = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
+
 export default function Home() {
   const {
     address,
@@ -146,11 +148,46 @@ export default function Home() {
   const [savedOnly, setSavedOnly] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [toast, setToast] = useState("");
+  const [allArtworks, setAllArtworks] = useState(demoArtworks);
+
+  const mounted = useSyncExternalStore(
+    subscribeToNothing,
+    getClientSnapshot,
+    getServerSnapshot,
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    getMintedNFTs()
+      .then((minted) => {
+        if (!active || minted.length === 0) return;
+
+        const onChainArtworks = minted.map((nft, index) => ({
+          id: 1000 + index,
+          title: nft.title,
+          artist: nft.artist,
+          initials: nft.title.slice(0, 2).toUpperCase(),
+          category: "On-chain",
+          price: `Token #${nft.tokenId}`,
+          image: nft.image,
+          ratio: "aspect-[4/5]",
+        }));
+
+        setAllArtworks([...onChainArtworks, ...demoArtworks]);
+      })
+      .catch((error) => {
+        console.error("Could not load minted NFTs:", error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filteredArtworks = useMemo(() => {
-    return artworks.filter((artwork) => {
+    return allArtworks.filter((artwork) => {
       const matchesSearch =
         `${artwork.title} ${artwork.artist} ${artwork.category}`
           .toLowerCase()
@@ -163,7 +200,7 @@ export default function Home() {
 
       return matchesSearch && matchesCategory && matchesSaved;
     });
-  }, [search, category, saved, savedOnly]);
+  }, [allArtworks, search, category, saved, savedOnly]);
 
   function notify(message: string) {
     setToast(message);
@@ -179,49 +216,6 @@ export default function Home() {
 
     notify(alreadySaved ? "Removed from your saved work" : "Artwork saved");
   }
-
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      notify("Please choose an image file.");
-      event.target.value = "";
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      notify("Image must be 10 MB or smaller.");
-      event.target.value = "";
-      return;
-    }
-
-    setSelectedFile(file);
-  }
-
-  function handleCreateSubmit() {
-    if (!isConnected) {
-      notify("Connect your wallet before preparing your artwork.");
-      return;
-    }
-
-    if (!isSepolia) {
-      notify("Switch your wallet to Sepolia first.");
-      return;
-    }
-
-    if (!selectedFile) {
-      notify("Choose an artwork image first.");
-      return;
-    }
-
-    notify("Image selected. Connect the Pinata upload and mint contract next.");
-  }
-
-  const shortAddress = address
-    ? `${address.slice(0, 6)}…${address.slice(-4)}`
-    : "";
 
   return (
     <div className="min-h-screen bg-[#f7f6f2] text-[#20211c]">
@@ -266,33 +260,48 @@ export default function Home() {
             type="button"
             onClick={() => setMobileMenuOpen((open) => !open)}
             aria-label="Toggle navigation"
+            aria-expanded={mobileMenuOpen}
             className="ml-auto rounded-full border border-[#e3e1d8] p-2.5 lg:hidden"
           >
             {mobileMenuOpen ? <X size={19} /> : <Menu size={19} />}
           </button>
 
-          {isConnected ? (
-            <div className="relative flex shrink-0 items-center gap-2">
-              <span
-                className={`hidden items-center gap-1.5 rounded-full px-2.5 py-2 text-[10px] font-bold sm:flex ${
-                  isSepolia
-                    ? "bg-[#e8efd9] text-[#4f692b]"
-                    : "bg-amber-100 text-amber-800"
-                }`}
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                {isSepolia ? "SEPOLIA" : `CHAIN ${chainId ?? "?"}`}
-              </span>
+          {mounted && isConnected ? (
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="hidden text-right sm:block">
+                <p className="text-xs font-bold">
+                  {address
+                    ? `${address.slice(0, 6)}…${address.slice(-4)}`
+                    : "Connected"}
+                </p>
+                <p
+                  className={`mt-1 text-[10px] ${
+                    isSepolia ? "text-[#587535]" : "text-amber-700"
+                  }`}
+                >
+                  {isSepolia ? "Sepolia testnet" : `Network ID: ${chainId}`}
+                </p>
+              </div>
+
+              {!isSepolia && (
+                <button
+                  type="button"
+                  onClick={switchToSepolia}
+                  disabled={isSwitching}
+                  className="rounded-full border border-[#e5e3db] px-3 py-2 text-xs font-semibold disabled:opacity-60"
+                >
+                  {isSwitching ? "Switching..." : "Switch network"}
+                </button>
+              )}
 
               <button
                 type="button"
                 onClick={disconnectWallet}
+                aria-label="Disconnect wallet"
                 title="Disconnect wallet"
-                className="flex items-center gap-2 rounded-full bg-[#20211c] px-3.5 py-3 text-xs font-semibold text-white transition hover:bg-[#3b3d34] sm:px-4"
+                className="rounded-full border border-[#e5e3db] p-2.5 transition hover:bg-white"
               >
-                <Wallet size={15} />
-                {shortAddress}
-                <LogOut size={13} className="hidden sm:block" />
+                <LogOut size={15} />
               </button>
             </div>
           ) : (
@@ -318,9 +327,11 @@ export default function Home() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search artwork..."
+                aria-label="Search artwork"
                 className="h-10 w-full rounded-full border border-[#e5e3db] bg-white pl-9 pr-3 text-sm outline-none"
               />
             </div>
+
             <div className="flex flex-wrap gap-4 text-sm">
               <a href="#discover" onClick={() => setMobileMenuOpen(false)}>
                 Discover
@@ -339,7 +350,7 @@ export default function Home() {
       {/* Main layout */}
       <div className="mx-auto grid max-w-[1600px] grid-cols-1 lg:grid-cols-[205px_minmax(0,1fr)]">
         {/* Sidebar */}
-        <aside className="hidden min-h-[calc(100vh-72px)] border-r border-[#e6e4dc] px-5 py-8 lg:block">
+        <aside className="hidden min-w-0 self-start overflow-x-hidden overflow-y-auto overscroll-contain border-r border-[#e6e4dc] px-5 py-8 lg:sticky lg:top-[72px] lg:block lg:h-[calc(100vh-72px)]">
           <p className="mb-4 px-3 text-[10px] font-bold uppercase tracking-[2px] text-[#96968d]">
             Explore
           </p>
@@ -406,11 +417,13 @@ export default function Home() {
             <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-[#edf3df] text-[#5b7732]">
               <Wallet size={18} />
             </div>
+
             <p className="text-sm font-semibold">Your studio, on-chain.</p>
             <p className="mt-2 text-xs leading-5 text-[#85867d]">
               Connect your wallet to prepare your first NFT.
             </p>
-            {!isConnected && (
+
+            {mounted && !isConnected && (
               <button
                 type="button"
                 onClick={connectWallet}
@@ -420,7 +433,8 @@ export default function Home() {
                 {isConnecting ? "Connecting..." : "Connect wallet ↗"}
               </button>
             )}
-            {isConnected && !isSepolia && (
+
+            {mounted && isConnected && !isSepolia && (
               <button
                 type="button"
                 onClick={switchToSepolia}
@@ -430,7 +444,8 @@ export default function Home() {
                 {isSwitching ? "Switching..." : "Switch to Sepolia"}
               </button>
             )}
-            {isConnected && isSepolia && (
+
+            {mounted && isConnected && isSepolia && (
               <p className="mt-4 flex items-center gap-2 text-xs font-semibold text-[#587535]">
                 <Check size={14} /> Wallet ready
               </p>
@@ -476,6 +491,7 @@ export default function Home() {
                   Explore the gallery
                   <ArrowDown size={16} />
                 </a>
+
                 <button
                   type="button"
                   onClick={() => setCreateOpen(true)}
@@ -525,6 +541,7 @@ export default function Home() {
                     An exploration in colour and form
                   </p>
                 </div>
+
                 <div className="hidden shrink-0 border border-white/30 px-3 py-2 text-[10px] font-bold tracking-wide sm:block">
                   ART, REIMAGINED
                 </div>
@@ -533,20 +550,41 @@ export default function Home() {
           </section>
 
           <EnsLookup />
-          <div id="create" className="my-10 scroll-mt-24">
-            <PinataUploader />
-          </div>
 
-          {/* Gallery heading */}
+          {/* Create and mint */}
+          <section id="create" className="my-10 scroll-mt-24">
+            <div className="mb-5">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#85867d]">
+                YOUR CREATIVE SPACE
+              </p>
+
+              <h2 className="font-serif text-3xl tracking-tight">
+                Create and mint your artwork
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-[#77786f]">
+                Connect your wallet, upload your artwork to IPFS, save its
+                metadata, and mint your NFT on the Sepolia testnet.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-[#e5e3db] bg-white p-5 sm:p-7">
+              <MintArtwork />
+            </div>
+          </section>
+
+          {/* Gallery */}
           <section id="gallery" className="scroll-mt-28">
             <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#85867d]">
                   A LITTLE OF EVERYTHING
                 </p>
+
                 <h2 className="font-serif text-3xl tracking-[-0.8px] sm:text-[36px]">
                   Worth a closer look
                 </h2>
+
                 <p className="mt-2 text-sm text-[#85867d]">
                   Discover your next favourite piece.
                 </p>
@@ -588,7 +626,7 @@ export default function Home() {
               </div>
             )}
 
-            {/* Gallery grid */}
+            {/* Artwork grid */}
             {filteredArtworks.length > 0 ? (
               <div className="columns-2 gap-4 sm:columns-3 xl:columns-4">
                 {filteredArtworks.map((artwork) => (
@@ -612,6 +650,7 @@ export default function Home() {
                             ? "Remove saved artwork"
                             : "Save artwork"
                         }
+                        aria-pressed={saved.includes(artwork.id)}
                         className={`absolute right-3 top-3 flex h-10 items-center gap-1.5 rounded-full px-3 text-xs font-bold shadow-sm transition ${
                           saved.includes(artwork.id)
                             ? "bg-[#c7f36b] text-[#202719]"
@@ -639,6 +678,7 @@ export default function Home() {
                         <h3 className="text-[13px] font-bold tracking-[-0.2px]">
                           {artwork.title}
                         </h3>
+
                         <span className="shrink-0 text-[10px] font-semibold text-[#77786f]">
                           {artwork.price}
                         </span>
@@ -648,7 +688,9 @@ export default function Home() {
                         <span className="flex h-6 w-6 items-center justify-center rounded-full border border-[#e0ded6] bg-white text-[9px] font-bold text-[#42443a]">
                           {artwork.initials}
                         </span>
+
                         <span>{artwork.artist}</span>
+
                         <ArrowUpRight
                           size={12}
                           className="ml-auto opacity-60"
@@ -661,10 +703,13 @@ export default function Home() {
             ) : (
               <div className="border border-dashed border-[#d9d7ce] px-5 py-16 text-center">
                 <Search size={25} className="mx-auto mb-4 text-[#85867d]" />
+
                 <h3 className="font-serif text-2xl">Nothing here just yet.</h3>
+
                 <p className="mt-2 text-sm text-[#85867d]">
                   Try another search or category.
                 </p>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -680,7 +725,7 @@ export default function Home() {
             )}
           </section>
 
-          {/* Creator section */}
+          {/* Creators */}
           <section
             id="creators"
             className="mt-16 border-y border-[#e3e1d9] py-10 sm:py-12"
@@ -690,15 +735,18 @@ export default function Home() {
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-[2px] text-[#85867d]">
                   PEOPLE MAKE THE CULTURE
                 </p>
+
                 <h2 className="max-w-lg font-serif text-3xl leading-tight tracking-[-0.8px] sm:text-4xl">
                   Made by people, not platforms.
                 </h2>
+
                 <p className="mt-3 max-w-xl text-sm leading-7 text-[#77786f]">
                   A home for independent artists and curious collectors.
                   Discover digital work, connect your wallet, and prepare to
                   bring your own creation on-chain.
                 </p>
               </div>
+
               <button
                 type="button"
                 onClick={() => setCreateOpen(true)}
@@ -717,6 +765,8 @@ export default function Home() {
           </footer>
         </main>
       </div>
+
+      <LiveMintAlerts />
 
       {/* Create artwork modal */}
       {createOpen && (
@@ -739,16 +789,19 @@ export default function Home() {
                 <p className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#85867d]">
                   YOUR CREATIVE SPACE
                 </p>
+
                 <h2
                   id="create-title"
                   className="font-serif text-3xl tracking-tight"
                 >
                   Create a piece.
                 </h2>
+
                 <p className="mt-2 text-sm text-[#77786f]">
                   Start with the artwork you want to share.
                 </p>
               </div>
+
               <button
                 type="button"
                 onClick={() => setCreateOpen(false)}
@@ -760,8 +813,10 @@ export default function Home() {
             </div>
 
             <MintArtwork />
+
             <p className="mt-4 text-center text-[11px] leading-5 text-[#85867d]">
-              Images and metadata are stored on IPFS; minting requires a Sepolia wallet transaction.
+              Images and metadata are stored on IPFS; minting requires a Sepolia
+              wallet transaction.
             </p>
           </div>
         </div>

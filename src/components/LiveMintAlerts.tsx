@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { createPublicClient, http, parseAbi } from "viem";
 import { mainnet, sepolia } from "viem/chains";
 
-const CONTRACT = "0x944fA4a2D247ede82cd39FD75Ef9CadE014c6a7a" as const;
+const CONTRACT = "0x5dDc98cAdd973246F4E20a0E895E7D6fe723Aa09" as const;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 const abi = parseAbi([
-  "event ArtworkMinted(address indexed creator, uint256 indexed tokenId, string metadataURI)",
+  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
 ]);
 
 const sepoliaClient = createPublicClient({
@@ -41,7 +42,7 @@ export default function LiveMintAlerts() {
         sessionStorage.getItem("mintlab-notifications-dismissed") !== "yes",
       );
     } else {
-      setStatus("Browser notifications are blocked in browser settings.");
+      setStatus("Notifications are blocked in browser settings.");
     }
 
     let active = true;
@@ -49,45 +50,56 @@ export default function LiveMintAlerts() {
     const unwatch = sepoliaClient.watchContractEvent({
       address: CONTRACT,
       abi,
-      eventName: "ArtworkMinted",
+      eventName: "Transfer",
       pollingInterval: 8_000,
+
       onLogs(logs) {
         void (async () => {
           for (const log of logs) {
             if (!active) return;
 
-            const creator = log.args.creator;
-            const tokenId = log.args.tokenId?.toString();
+            const { from, to, tokenId } = log.args;
 
-            if (!creator || !tokenId) continue;
+            // Only treat transfers from the zero address as new mints.
+            if (
+              !from ||
+              from.toLowerCase() !== ZERO_ADDRESS ||
+              !to ||
+              tokenId === undefined
+            ) {
+              continue;
+            }
 
-            let creatorName = shortAddress(creator);
+            let creatorName = shortAddress(to);
 
             try {
-              const ensName = await ensClient.getEnsName({ address: creator });
+              const ensName = await ensClient.getEnsName({ address: to });
               if (ensName) creatorName = ensName;
             } catch {
-              // ENS is optional; a wallet address is always a valid fallback.
+              // ENS is optional.
             }
 
             if (!active) return;
 
-            const message = `NFT #${tokenId} was minted by ${creatorName}`;
+            const message = `NFT #${tokenId.toString()} was minted to ${creatorName}`;
             setLatestEvent(message);
-            setStatus("Live event monitoring is active.");
+            setStatus("Live Diamond mint monitoring is active.");
 
             if (
               "Notification" in window &&
               Notification.permission === "granted"
             ) {
-              new Notification("New NFT minted", { body: message });
+              new Notification("New MINTLAB NFT minted", {
+                body: message,
+              });
             }
           }
         })();
       },
+
       onError(error) {
         if (active) {
-          console.error("Mint event watcher error:", error);
+          console.error("Diamond mint watcher error:", error);
           setStatus("Event connection interrupted; retrying.");
         }
       },
@@ -116,8 +128,9 @@ export default function LiveMintAlerts() {
       if (enabled) {
         sessionStorage.setItem("mintlab-notifications-dismissed", "yes");
         setStatus("Browser notifications enabled.");
+
         new Notification("MINTLAB notifications enabled", {
-          body: "You'll be notified when newly observed NFT mints are detected.",
+          body: "You'll be notified about newly observed Diamond NFT mints while the app is open.",
         });
       } else {
         setStatus(
@@ -193,9 +206,9 @@ export default function LiveMintAlerts() {
       )}
 
       <p className="mt-3 text-xs text-neutral-500">
-        Watches the ArtworkMinted event on Sepolia. ENS names are resolved on
-        Ethereum mainnet when available. Notifications require browser
-        permission and apply to newly observed events while this app is running.
+        Watches ERC-721 mint events on the MINTLAB Diamond on Sepolia. ENS names
+        are resolved on Ethereum mainnet when available. Browser notifications
+        require permission and this app to remain open.
       </p>
     </section>
   );
