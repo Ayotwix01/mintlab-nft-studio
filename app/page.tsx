@@ -1,25 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   ArrowDown,
   ArrowDownRight,
-  ArrowRight,
   ArrowUpRight,
   Bookmark,
   Check,
-  ChevronDown,
   Compass,
   ImagePlus,
   Layers3,
+  LogOut,
   Menu,
+  Network,
   Search,
   Sparkles,
   Wallet,
   X,
-  LogOut,
-  Network,
-  UploadCloud,
 } from "lucide-react";
 import { useWallet } from "@/src/hooks/useWallet";
 import EnsLookup from "@/src/components/EnsLookup";
@@ -126,6 +123,10 @@ const categories = [
   "On-chain",
 ];
 
+const subscribeToNothing = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
+
 export default function Home() {
   const {
     address,
@@ -140,20 +141,21 @@ export default function Home() {
     walletError,
   } = useWallet();
 
-  const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All work");
   const [saved, setSaved] = useState<number[]>([]);
   const [savedOnly, setSavedOnly] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [toast, setToast] = useState("");
   const [allArtworks, setAllArtworks] = useState(demoArtworks);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    subscribeToNothing,
+    getClientSnapshot,
+    getServerSnapshot,
+  );
+
   useEffect(() => {
     let active = true;
 
@@ -214,49 +216,6 @@ export default function Home() {
     notify(alreadySaved ? "Removed from your saved work" : "Artwork saved");
   }
 
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      notify("Please choose an image file.");
-      event.target.value = "";
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      notify("Image must be 10 MB or smaller.");
-      event.target.value = "";
-      return;
-    }
-
-    setSelectedFile(file);
-  }
-
-  function handleCreateSubmit() {
-    if (!isConnected) {
-      notify("Connect your wallet before preparing your artwork.");
-      return;
-    }
-
-    if (!isSepolia) {
-      notify("Switch your wallet to Sepolia first.");
-      return;
-    }
-
-    if (!selectedFile) {
-      notify("Choose an artwork image first.");
-      return;
-    }
-
-    notify("Image selected. Connect the Pinata upload and mint contract next.");
-  }
-
-  const shortAddress = address
-    ? `${address.slice(0, 6)}…${address.slice(-4)}`
-    : "";
-
   return (
     <div className="min-h-screen bg-[#f7f6f2] text-[#20211c]">
       {/* Top navigation */}
@@ -269,6 +228,7 @@ export default function Home() {
             MINT<span className="text-[#78953f]">LAB</span>
             <span className="text-[#a2c65a]">.</span>
           </a>
+
           <div className="relative hidden max-w-[480px] flex-1 md:block">
             <Search
               size={17}
@@ -282,6 +242,7 @@ export default function Home() {
               className="h-11 w-full rounded-full border border-[#e5e3db] bg-[#eeede7] pl-11 pr-4 text-sm outline-none transition focus:border-[#9bb76a] focus:ring-2 focus:ring-[#c7f36b]/40"
             />
           </div>
+
           <nav className="ml-auto hidden items-center gap-7 text-sm font-medium text-[#77786f] lg:flex">
             <a href="#discover" className="text-[#20211c]">
               Discover
@@ -293,17 +254,54 @@ export default function Home() {
               Creators
             </a>
           </nav>
+
           <button
             type="button"
             onClick={() => setMobileMenuOpen((open) => !open)}
             aria-label="Toggle navigation"
+            aria-expanded={mobileMenuOpen}
             className="ml-auto rounded-full border border-[#e3e1d8] p-2.5 lg:hidden"
           >
             {mobileMenuOpen ? <X size={19} /> : <Menu size={19} />}
           </button>
+
           {mounted && isConnected ? (
-            <div className="relative flex shrink-0 items-center gap-2">
-              {/* Keep your existing connected-wallet content here */}
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="hidden text-right sm:block">
+                <p className="text-xs font-bold">
+                  {address
+                    ? `${address.slice(0, 6)}…${address.slice(-4)}`
+                    : "Connected"}
+                </p>
+                <p
+                  className={`mt-1 text-[10px] ${
+                    isSepolia ? "text-[#587535]" : "text-amber-700"
+                  }`}
+                >
+                  {isSepolia ? "Sepolia testnet" : `Network ID: ${chainId}`}
+                </p>
+              </div>
+
+              {!isSepolia && (
+                <button
+                  type="button"
+                  onClick={switchToSepolia}
+                  disabled={isSwitching}
+                  className="rounded-full border border-[#e5e3db] px-3 py-2 text-xs font-semibold disabled:opacity-60"
+                >
+                  {isSwitching ? "Switching..." : "Switch network"}
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={disconnectWallet}
+                aria-label="Disconnect wallet"
+                title="Disconnect wallet"
+                className="rounded-full border border-[#e5e3db] p-2.5 transition hover:bg-white"
+              >
+                <LogOut size={15} />
+              </button>
             </div>
           ) : (
             <button
@@ -314,7 +312,7 @@ export default function Home() {
             >
               {isConnecting ? "Connecting..." : "Connect wallet ↗"}
             </button>
-          )}{" "}
+          )}
         </div>
 
         {mobileMenuOpen && (
@@ -328,9 +326,11 @@ export default function Home() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search artwork..."
+                aria-label="Search artwork"
                 className="h-10 w-full rounded-full border border-[#e5e3db] bg-white pl-9 pr-3 text-sm outline-none"
               />
             </div>
+
             <div className="flex flex-wrap gap-4 text-sm">
               <a href="#discover" onClick={() => setMobileMenuOpen(false)}>
                 Discover
@@ -416,10 +416,12 @@ export default function Home() {
             <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-[#edf3df] text-[#5b7732]">
               <Wallet size={18} />
             </div>
+
             <p className="text-sm font-semibold">Your studio, on-chain.</p>
             <p className="mt-2 text-xs leading-5 text-[#85867d]">
               Connect your wallet to prepare your first NFT.
             </p>
+
             {mounted && !isConnected && (
               <button
                 type="button"
@@ -430,6 +432,7 @@ export default function Home() {
                 {isConnecting ? "Connecting..." : "Connect wallet ↗"}
               </button>
             )}
+
             {mounted && isConnected && !isSepolia && (
               <button
                 type="button"
@@ -440,6 +443,7 @@ export default function Home() {
                 {isSwitching ? "Switching..." : "Switch to Sepolia"}
               </button>
             )}
+
             {mounted && isConnected && isSepolia && (
               <p className="mt-4 flex items-center gap-2 text-xs font-semibold text-[#587535]">
                 <Check size={14} /> Wallet ready
@@ -486,6 +490,7 @@ export default function Home() {
                   Explore the gallery
                   <ArrowDown size={16} />
                 </a>
+
                 <button
                   type="button"
                   onClick={() => setCreateOpen(true)}
@@ -535,6 +540,7 @@ export default function Home() {
                     An exploration in colour and form
                   </p>
                 </div>
+
                 <div className="hidden shrink-0 border border-white/30 px-3 py-2 text-[10px] font-bold tracking-wide sm:block">
                   ART, REIMAGINED
                 </div>
@@ -544,7 +550,8 @@ export default function Home() {
 
           <EnsLookup />
 
-          <div id="create" className="my-10 scroll-mt-24">
+          {/* Create and mint */}
+          <section id="create" className="my-10 scroll-mt-24">
             <div className="mb-5">
               <p className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#85867d]">
                 YOUR CREATIVE SPACE
@@ -563,18 +570,20 @@ export default function Home() {
             <div className="rounded-2xl border border-[#e5e3db] bg-white p-5 sm:p-7">
               <MintArtwork />
             </div>
-          </div>
+          </section>
 
-          {/* Gallery heading */}
+          {/* Gallery */}
           <section id="gallery" className="scroll-mt-28">
             <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#85867d]">
                   A LITTLE OF EVERYTHING
                 </p>
+
                 <h2 className="font-serif text-3xl tracking-[-0.8px] sm:text-[36px]">
                   Worth a closer look
                 </h2>
+
                 <p className="mt-2 text-sm text-[#85867d]">
                   Discover your next favourite piece.
                 </p>
@@ -616,7 +625,7 @@ export default function Home() {
               </div>
             )}
 
-            {/* Gallery grid */}
+            {/* Artwork grid */}
             {filteredArtworks.length > 0 ? (
               <div className="columns-2 gap-4 sm:columns-3 xl:columns-4">
                 {filteredArtworks.map((artwork) => (
@@ -640,6 +649,7 @@ export default function Home() {
                             ? "Remove saved artwork"
                             : "Save artwork"
                         }
+                        aria-pressed={saved.includes(artwork.id)}
                         className={`absolute right-3 top-3 flex h-10 items-center gap-1.5 rounded-full px-3 text-xs font-bold shadow-sm transition ${
                           saved.includes(artwork.id)
                             ? "bg-[#c7f36b] text-[#202719]"
@@ -667,6 +677,7 @@ export default function Home() {
                         <h3 className="text-[13px] font-bold tracking-[-0.2px]">
                           {artwork.title}
                         </h3>
+
                         <span className="shrink-0 text-[10px] font-semibold text-[#77786f]">
                           {artwork.price}
                         </span>
@@ -676,7 +687,9 @@ export default function Home() {
                         <span className="flex h-6 w-6 items-center justify-center rounded-full border border-[#e0ded6] bg-white text-[9px] font-bold text-[#42443a]">
                           {artwork.initials}
                         </span>
+
                         <span>{artwork.artist}</span>
+
                         <ArrowUpRight
                           size={12}
                           className="ml-auto opacity-60"
@@ -689,10 +702,13 @@ export default function Home() {
             ) : (
               <div className="border border-dashed border-[#d9d7ce] px-5 py-16 text-center">
                 <Search size={25} className="mx-auto mb-4 text-[#85867d]" />
+
                 <h3 className="font-serif text-2xl">Nothing here just yet.</h3>
+
                 <p className="mt-2 text-sm text-[#85867d]">
                   Try another search or category.
                 </p>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -708,7 +724,7 @@ export default function Home() {
             )}
           </section>
 
-          {/* Creator section */}
+          {/* Creators */}
           <section
             id="creators"
             className="mt-16 border-y border-[#e3e1d9] py-10 sm:py-12"
@@ -718,15 +734,18 @@ export default function Home() {
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-[2px] text-[#85867d]">
                   PEOPLE MAKE THE CULTURE
                 </p>
+
                 <h2 className="max-w-lg font-serif text-3xl leading-tight tracking-[-0.8px] sm:text-4xl">
                   Made by people, not platforms.
                 </h2>
+
                 <p className="mt-3 max-w-xl text-sm leading-7 text-[#77786f]">
                   A home for independent artists and curious collectors.
                   Discover digital work, connect your wallet, and prepare to
                   bring your own creation on-chain.
                 </p>
               </div>
+
               <button
                 type="button"
                 onClick={() => setCreateOpen(true)}
@@ -767,16 +786,19 @@ export default function Home() {
                 <p className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#85867d]">
                   YOUR CREATIVE SPACE
                 </p>
+
                 <h2
                   id="create-title"
                   className="font-serif text-3xl tracking-tight"
                 >
                   Create a piece.
                 </h2>
+
                 <p className="mt-2 text-sm text-[#77786f]">
                   Start with the artwork you want to share.
                 </p>
               </div>
+
               <button
                 type="button"
                 onClick={() => setCreateOpen(false)}
@@ -788,6 +810,7 @@ export default function Home() {
             </div>
 
             <MintArtwork />
+
             <p className="mt-4 text-center text-[11px] leading-5 text-[#85867d]">
               Images and metadata are stored on IPFS; minting requires a Sepolia
               wallet transaction.

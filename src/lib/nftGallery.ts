@@ -1,18 +1,13 @@
-import {
-  createPublicClient,
-  http,
-  parseAbi,
-  parseEventLogs,
-} from "viem";
+import { createPublicClient, http, parseAbi, parseEventLogs } from "viem";
 import { sepolia } from "viem/chains";
+import type { Log } from "viem";
 
 const CONTRACT = "0x944fA4a2D247ede82cd39FD75Ef9CadE014c6a7a" as const;
 
 const FIRST_MINT_TX =
   "0x35bdd355acc1888d1aeb4e0d937a2e4fc4573454cfa675198d30717ec88f1dfc" as const;
 
-const KNOWN_IMAGE =
-  "ipfs://QmfKHMAfUchr2htHxzbHiN9TGP289VEc6BgYKNw9rffg8s";
+const KNOWN_IMAGE = "ipfs://QmfKHMAfUchr2htHxzbHiN9TGP289VEc6BgYKNw9rffg8s";
 
 const abi = parseAbi([
   "event ArtworkMinted(address indexed creator, uint256 indexed tokenId, string metadataURI)",
@@ -45,7 +40,7 @@ function ipfsUrl(uri: string): string {
   return uri;
 }
 
-async function readNFTsFromLogs(logs: any[]): Promise<GalleryNFT[]> {
+async function readNFTsFromLogs(logs: Log[]): Promise<GalleryNFT[]> {
   const decoded = parseEventLogs({
     abi,
     eventName: "ArtworkMinted",
@@ -60,11 +55,7 @@ async function readNFTsFromLogs(logs: any[]): Promise<GalleryNFT[]> {
 
     const { creator, tokenId, metadataURI } = event.args;
 
-    if (
-      !creator ||
-      tokenId === undefined ||
-      !metadataURI
-    ) {
+    if (!creator || tokenId === undefined || !metadataURI) {
       continue;
     }
 
@@ -153,7 +144,7 @@ export async function getMintedNFTs(): Promise<GalleryNFT[]> {
     );
   }
 
-  return Array.from(nftMap.values()).sort(
-    (a, b) => Number(BigInt(b.tokenId) - BigInt(a.tokenId)),
+  return Array.from(nftMap.values()).sort((a, b) =>
+    Number(BigInt(b.tokenId) - BigInt(a.tokenId)),
   );
 }
